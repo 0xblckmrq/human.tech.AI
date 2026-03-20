@@ -18,6 +18,11 @@ const path = require("path");
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
+// Roles that the bot will never respond to (case-insensitive)
+const IGNORED_ROLES = process.env.IGNORED_ROLES
+  ? process.env.IGNORED_ROLES.split(",").map((r) => r.trim().toLowerCase())
+  : [];
+
 const CONFIG = {
   // Channels where the bot will auto-respond (leave empty [] to respond everywhere)
   activeChannels: process.env.ACTIVE_CHANNELS
@@ -227,6 +232,13 @@ async function main() {
   discord.on(Events.MessageCreate, async (message) => {
     // Ignore bots
     if (message.author.bot) return;
+
+    // Ignore Elite Volunteers and moderators
+    if (message.member) {
+      const memberRoles = message.member.roles.cache.map((r) => r.name.toLowerCase());
+      const isIgnoredRole = IGNORED_ROLES.some((role) => memberRoles.includes(role));
+      if (isIgnoredRole) return;
+    }
 
     // Check channel restriction
     if (
