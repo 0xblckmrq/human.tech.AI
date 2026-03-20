@@ -392,6 +392,66 @@ async function main() {
     }
   });
 
+  // Admin command: !kb-threads (lists all scraped Twitter files with details)
+  discord.on(Events.MessageCreate, async (message) => {
+    if (message.author.bot) return;
+    if (message.content.trim() !== "!kb-threads") return;
+    const member = message.member;
+    const isOwner = message.guild && message.guild.ownerId === message.author.id;
+    if (!member || (!member.permissions.has("ManageGuild") && !isOwner)) return;
+
+    const docsFolder = path.join(__dirname, "docs");
+    if (!fs.existsSync(docsFolder)) {
+      await message.reply("No docs folder found — nothing has been scraped yet.");
+      return;
+    }
+
+    // Find all twitter-related .md files in docs/
+    const twitterFiles = fs
+      .readdirSync(docsFolder)
+      .filter((f) => f.startsWith("twitter-") && f.endsWith(".md"));
+
+    if (!twitterFiles.length) {
+      await message.reply(
+        "No Twitter files found in docs/ yet.\nMake sure `TWITTER_ACCOUNTS` is set in your env vars and the bot has run at least once.\nYou can force a scrape now with `!kb-reload`."
+      );
+      return;
+    }
+
+    const lines = twitterFiles.map((filename) => {
+      const filepath = path.join(docsFolder, filename);
+      const raw = fs.readFileSync(filepath, "utf8");
+
+      // Parse metadata from the file header
+      const tweetCountMatch = raw.match(/\*\*Tweets fetched:\*\* (\d+)/);
+      const lastUpdatedMatch = raw.match(/\*\*Last updated:\*\* ([\d-]+)/);
+      const sourceMatch = raw.match(/\*\*Source:\*\* (.+)/);
+      const titleMatch = raw.match(/^# (.+)/m);
+
+      const tweetCount = tweetCountMatch ? tweetCountMatch[1] : "?";
+      const lastUpdated = lastUpdatedMatch ? lastUpdatedMatch[1] : "unknown";
+      const source = sourceMatch ? sourceMatch[1].trim() : null;
+      const title = titleMatch ? titleMatch[1].trim() : filename;
+
+      const isAccount = filename.startsWith("twitter-account-");
+      const icon = isAccount ? "🐦" : "🧵";
+      const typeLabel = isAccount ? "account" : "thread";
+      const sourceLine = source ? `\n> Source: ${source}` : "";
+
+      return `${icon} **${title}** (${typeLabel})\n> ${tweetCount} tweets · last scraped ${lastUpdated}${sourceLine}`;
+    });
+
+    const header = `**Scraped Twitter content: ${twitterFiles.length} file${twitterFiles.length !== 1 ? "s" : ""}**\n\n`;
+    const full = header + lines.join("\n\n");
+
+    if (full.length <= 2000) {
+      await message.reply(full);
+    } else {
+      const chunks = full.match(/.{1,1990}/gs) || [full];
+      for (const chunk of chunks) await message.reply(chunk);
+    }
+  });
+
   await discord.login(process.env.DISCORD_BOT_TOKEN);
 }
 
