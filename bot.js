@@ -84,7 +84,17 @@ class KnowledgeBase {
     }
   }
 
-  // Scrape text content from a URL
+  // Extract clean text from HTML, stripping nav/sidebar noise
+  extractText(html, url) {
+    const $ = cheerio.load(html);
+    $("script, style, nav, footer, header, aside, noscript, iframe, [role=navigation], [role=banner], [role=complementary], .sidebar, .nav, .navbar, .menu, .toc, .breadcrumb").remove();
+    let text = "";
+    const semantic = $("main, article, [role=main], .content, .docs-content, .markdown, #content, #main, .nextra-content").text();
+    text = semantic.trim().length > 200 ? semantic : $("body").text();
+    return text.replace(/\s+/g, " ").trim();
+  }
+
+  // Scrape a single URL and return { source, content }
   async scrapeWebsite(url) {
     if (this.websiteCache.has(url)) return this.websiteCache.get(url);
     try {
@@ -93,34 +103,17 @@ class KnowledgeBase {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.5",
         },
         timeout: 15000,
       });
       const html = await res.text();
-      const $ = cheerio.load(html);
-      // Remove noise
-      $("script, style, nav, footer, header, aside, .nav, .footer, noscript, iframe").remove();
-
-      // Try to get meaningful content — prioritise semantic tags first
-      let text = "";
-      const semantic = $("main, article, section, [role=main], .content, .docs, #content, #main").text();
-      if (semantic.trim().length > 200) {
-        text = semantic;
-      } else {
-        text = $("body").text();
-      }
-      text = text.replace(/\s+/g, " ").trim();
-
-      // Log a warning if content looks suspiciously thin
+      let text = this.extractText(html, url).slice(0, 8000);
       const wordCount = text.split(" ").length;
-      if (wordCount < 100) {
-        console.warn(`[KB] WARNING: Only ${wordCount} words scraped from ${url} — site may be JS-rendered. Consider adding content manually to docs/ instead.`);
+      if (wordCount < 80) {
+        console.warn(`[KB] WARNING: Only ${wordCount} words from ${url} — likely JS-rendered or nav-only`);
       } else {
         console.log(`[KB] Scraped ${wordCount} words from ${url}`);
       }
-
-      text = text.slice(0, 8000);
       this.websiteCache.set(url, { source: url, content: text });
       return { source: url, content: text };
     } catch (err) {
@@ -129,11 +122,76 @@ class KnowledgeBase {
     }
   }
 
-  // Load multiple URLs from config
+  // Skip URLs that are unlikely to have useful content
+  shouldSkipUrl(url) {
+    return /\.(png|jpg|jpeg|gif|svg|ico|pdf|zip|css|js|woff|woff2|ttf)$/i.test(url) ||
+      /\/api\/|\/auth\/|\/login|\/logout|\/signup|\/oauth|\/cdn-cgi\//.test(url) ||
+      /#/.test(url);
+  }
+
+  // Extract all internal links from an HTML page
+  extractLinks(html, rootUrl) {
+    const $ = cheerio.load(html);
+    const base = new URL(rootUrl);
+    const links = [];
+    $("a[href]").each((_, el) => {
+      try {
+        const href = new URL($(el).attr("href"), rootUrl);
+        href.hash = "";
+        href.search = "";
+        if (href.hostname === base.hostname && !this.shouldSkipUrl(href.href)) {
+          links.push(href.href);
+        }
+      } catch {}
+    });
+    return [...new Set(links)];
+  }
+
+  // Full site crawl — follows links recursively up to maxPages
+  async crawlWebsite(rootUrl, maxPages) {
+    const queue = [rootUrl];
+    const seen = new Set([rootUrl]);
+    const results = [];
+
+    console.log(`[KB] Starting full crawl of ${rootUrl} (max ${maxPages} pages)`);
+
+    while (queue.length > 0 && results.length < maxPages) {
+      const url = queue.shift();
+      const result = await this.scrapeWebsite(url);
+
+      if (result) {
+        const words = result.content.split(" ").length;
+        if (words >= 50) results.push(result); // skip near-empty pages
+      }
+
+      // Discover new links from this page
+      try {
+        const res = await fetch(url, { timeout: 10000 });
+        const html = await res.text();
+        const links = this.extractLinks(html, rootUrl);
+        for (const link of links) {
+          if (!seen.has(link)) {
+            seen.add(link);
+            queue.push(link);
+          }
+        }
+      } catch {}
+    }
+
+    console.log(`[KB] Crawl complete: ${results.length} pages scraped from ${rootUrl} (${seen.size} total discovered)`);
+    return results;
+  }
+
+  // Load multiple URLs from config — full crawl of each site
   async loadWebsites(urls) {
-    const results = await Promise.all(urls.map((u) => this.scrapeWebsite(u)));
-    for (const r of results) {
-      if (r) this.docs.push(r);
+    const maxPages = parseInt(process.env.MAX_PAGES_PER_SITE || "50");
+    for (const url of urls) {
+      const results = await this.crawlWebsite(url, maxPages);
+      for (const r of results) {
+        if (!this.docs.find((d) => d.source === r.source)) {
+          this.docs.push(r);
+        }
+      }
     }
     this.lastRefreshed = new Date();
   }
@@ -147,7 +205,7 @@ class KnowledgeBase {
   }
 
   // Build context string for the AI prompt
-  buildContext(maxLength = 12000) {
+  buildContext(maxLength = 40000) {
     let context = "";
     for (const doc of this.docs) {
       const block = `\n\n--- Source: ${doc.source} ---\n${doc.content}`;
