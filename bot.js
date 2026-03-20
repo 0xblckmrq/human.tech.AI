@@ -15,7 +15,13 @@ const fetch = require("node-fetch");
 const cheerio = require("cheerio");
 const fs = require("fs");
 const path = require("path");
-const { scrapeAllThreads } = require("./twitter-scraper");
+// Load Twitter scraper only if the file exists (optional feature)
+let scrapeAllThreads = async () => {};
+try {
+  ({ scrapeAllThreads } = require("./twitter-scraper"));
+} catch {
+  // twitter-scraper.js not present — Twitter thread scraping disabled
+}
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -84,14 +90,37 @@ class KnowledgeBase {
     try {
       console.log(`[KB] Scraping: ${url}`);
       const res = await fetch(url, {
-        headers: { "User-Agent": "Mozilla/5.0 (compatible; SupportBot/1.0)" },
-        timeout: 10000,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.5",
+        },
+        timeout: 15000,
       });
       const html = await res.text();
       const $ = cheerio.load(html);
       // Remove noise
-      $("script, style, nav, footer, header, aside, .nav, .footer").remove();
-      const text = $("body").text().replace(/\s+/g, " ").trim().slice(0, 8000);
+      $("script, style, nav, footer, header, aside, .nav, .footer, noscript, iframe").remove();
+
+      // Try to get meaningful content — prioritise semantic tags first
+      let text = "";
+      const semantic = $("main, article, section, [role=main], .content, .docs, #content, #main").text();
+      if (semantic.trim().length > 200) {
+        text = semantic;
+      } else {
+        text = $("body").text();
+      }
+      text = text.replace(/\s+/g, " ").trim();
+
+      // Log a warning if content looks suspiciously thin
+      const wordCount = text.split(" ").length;
+      if (wordCount < 100) {
+        console.warn(`[KB] WARNING: Only ${wordCount} words scraped from ${url} — site may be JS-rendered. Consider adding content manually to docs/ instead.`);
+      } else {
+        console.log(`[KB] Scraped ${wordCount} words from ${url}`);
+      }
+
+      text = text.slice(0, 8000);
       this.websiteCache.set(url, { source: url, content: text });
       return { source: url, content: text };
     } catch (err) {
@@ -206,6 +235,7 @@ async function main() {
   const websiteUrls = process.env.WEBSITE_URLS
     ? process.env.WEBSITE_URLS.split(",")
     : [];
+
   if (websiteUrls.length > 0) {
     await kb.loadWebsites(websiteUrls);
   }
@@ -316,13 +346,50 @@ async function main() {
     if (message.author.bot) return;
     if (message.content.trim() !== "!kb-reload") return;
     const member = message.member;
-    if (!member || !member.permissions.has("ManageGuild")) return;
+    const isOwner = message.guild && message.guild.ownerId === message.author.id;
+    if (!member || (!member.permissions.has("ManageGuild") && !isOwner)) return;
 
     await message.reply("Refreshing knowledge base...");
-    await kb.refresh(websiteUrls);
+    await scrapeAllThreads();
+    kb.docs = [];
+    kb.loadDocsFolder(path.join(__dirname, "docs"));
+    if (websiteUrls.length > 0) await kb.refresh(websiteUrls);
     await message.reply(
       `Done! Loaded ${kb.docs.length} sources: ${kb.docs.map((d) => d.source).join(", ")}`
     );
+  });
+
+  // Admin command: !kb-status (shows each source and how much content was captured)
+  discord.on(Events.MessageCreate, async (message) => {
+    if (message.author.bot) return;
+    if (message.content.trim() !== "!kb-status") return;
+    const member = message.member;
+    const isOwner = message.guild && message.guild.ownerId === message.author.id;
+    if (!member || (!member.permissions.has("ManageGuild") && !isOwner)) return;
+
+    if (!kb.docs.length) {
+      await message.reply("No knowledge sources loaded.");
+      return;
+    }
+
+    const lines = kb.docs.map((doc) => {
+      const words = doc.content.trim().split(/\s+/).length;
+      const preview = doc.content.trim().slice(0, 80).replace(/\n/g, " ");
+      const status = words < 50 ? "⚠️ very little content" : "✅";
+      return `${status} **${doc.source}** — ${words} words\n> ${preview}...`;
+    });
+
+    const header = `**Knowledge base: ${kb.docs.length} sources loaded**\n\n`;
+    const body = lines.join("\n\n");
+    const full = header + body;
+
+    // Split if over Discord's 2000 char limit
+    if (full.length <= 2000) {
+      await message.reply(full);
+    } else {
+      const chunks = full.match(/.{1,1990}/gs) || [full];
+      for (const chunk of chunks) await message.reply(chunk);
+    }
   });
 
   await discord.login(process.env.DISCORD_BOT_TOKEN);
