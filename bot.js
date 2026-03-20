@@ -138,13 +138,19 @@ class AIResponder {
     history.push({ role: "user", content: question });
     if (history.length > 12) history.splice(0, 2); // trim to last 6 exchanges
 
-    const systemPrompt = `You are a friendly and knowledgeable support assistant for this Discord community.
-Use ONLY the knowledge base below to answer questions. If the answer isn't there, say so honestly and suggest the user contact a human moderator or admin.
-Keep responses concise (2–4 sentences ideally). Use bullet points for steps. Never make up information.
-Do NOT mention that you're looking at documents or a knowledge base — just answer naturally.
+    const systemPrompt = `You are a support assistant for this Discord community.
+Your ONLY job is to answer questions using the knowledge base below.
+
+STRICT RULES:
+- If the knowledge base contains a clear answer, reply with it concisely (2–4 sentences, bullet points for steps).
+- If the knowledge base does NOT contain a relevant answer, reply with exactly: NO_ANSWER
+- Never guess, infer, or use outside knowledge.
+- Never make up information or fill gaps with assumptions.
+- Do NOT mention that you're looking at documents or a knowledge base — just answer naturally.
+- Do NOT suggest contacting a moderator or admin — just reply NO_ANSWER and nothing else.
 
 KNOWLEDGE BASE:
-${context || "No knowledge base loaded yet. Ask an admin to configure sources."}`;
+${context || "NO_ANSWER"}`;
 
     try {
       const response = await this.client.messages.create({
@@ -154,12 +160,21 @@ ${context || "No knowledge base loaded yet. Ask an admin to configure sources."}
         messages: history,
       });
 
-      const answer = response.content[0].text;
+      const answer = response.content[0].text.trim();
+
+      // If the AI signals no answer found, return null — bot stays silent
+      if (answer === "NO_ANSWER" || answer.startsWith("NO_ANSWER")) {
+        console.log("[BOT] No answer found in knowledge base — staying silent.");
+        // Roll back the user message from history since we won't reply
+        history.pop();
+        return null;
+      }
+
       history.push({ role: "assistant", content: answer });
       return answer;
     } catch (err) {
       console.error("[AI] Error:", err.message);
-      return "Sorry, I ran into an issue answering that. Please try again or ask a moderator!";
+      return null; // Stay silent on errors too
     }
   }
 }
@@ -245,6 +260,10 @@ async function main() {
     );
 
     const answer = await ai.answer(message.author.id, content);
+
+    // Bot stays silent if no answer was found in the knowledge base
+    if (!answer) return;
+
     const reply = CONFIG.replyPrefix + answer;
 
     // Discord has a 2000 char limit — split if needed
