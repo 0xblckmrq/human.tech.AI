@@ -15,6 +15,7 @@ const fetch = require("node-fetch");
 const cheerio = require("cheerio");
 const fs = require("fs");
 const path = require("path");
+const { scrapeAllThreads } = require("./twitter-scraper");
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -195,6 +196,9 @@ async function main() {
   // 1. Init knowledge base
   const kb = new KnowledgeBase();
 
+  // Scrape Twitter threads into docs/ before loading
+  await scrapeAllThreads();
+
   // Load local docs folder (create a ./docs folder and put .txt or .md files there)
   kb.loadDocsFolder(path.join(__dirname, "docs"));
 
@@ -210,6 +214,16 @@ async function main() {
   if (websiteUrls.length > 0) {
     setInterval(() => kb.refresh(websiteUrls), 6 * 60 * 60 * 1000);
   }
+
+  // Re-scrape Twitter threads + reload all docs every hour
+  setInterval(async () => {
+    console.log("[Bot] Hourly reload — scraping Twitter threads and reloading docs...");
+    await scrapeAllThreads();
+    kb.docs = [];
+    kb.loadDocsFolder(path.join(__dirname, "docs"));
+    if (websiteUrls.length > 0) await kb.refresh(websiteUrls);
+    console.log(`[Bot] Reload complete. ${kb.docs.length} sources loaded.`);
+  }, 60 * 60 * 1000);
 
   console.log(
     `[KB] Total knowledge sources: ${kb.docs.length} (${kb.docs.map((d) => d.source).join(", ")})`
