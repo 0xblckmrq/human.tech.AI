@@ -23,6 +23,11 @@ const IGNORED_ROLES = process.env.IGNORED_ROLES
   ? process.env.IGNORED_ROLES.split(",").map((r) => r.trim().toLowerCase())
   : [];
 
+// Channels where IGNORED_ROLES are bypassed — bot responds to everyone here
+const BYPASS_ROLES_CHANNELS = process.env.BYPASS_ROLES_CHANNELS
+  ? process.env.BYPASS_ROLES_CHANNELS.split(",").map((c) => c.trim())
+  : [];
+
 const CONFIG = {
   // Channels where the bot will auto-respond (leave empty [] to respond everywhere)
   activeChannels: process.env.ACTIVE_CHANNELS
@@ -233,8 +238,11 @@ async function main() {
     // Ignore bots
     if (message.author.bot) return;
 
-    // Ignore Elite Volunteers and moderators
-    if (message.member) {
+    // Ignore Elite Volunteers and moderators — unless in a bypass channel
+    const inBypassChannel =
+      BYPASS_ROLES_CHANNELS.includes(message.channel.id) ||
+      BYPASS_ROLES_CHANNELS.includes(message.channel.name);
+    if (!inBypassChannel && message.member) {
       const memberRoles = message.member.roles.cache.map((r) => r.name.toLowerCase());
       const isIgnoredRole = IGNORED_ROLES.some((role) => memberRoles.includes(role));
       if (isIgnoredRole) return;
