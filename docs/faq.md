@@ -159,3 +159,44 @@ Support for linked wallets is planned.
 **What happens if my wallet is compromised?**
 Users are responsible for wallet security. NFTs cannot be recovered or reassigned.
 
+## Passport
+**What does the 80% Steam playtime requirement mean?**
+
+The 80% Steam playtime requirement ensures that a user’s gaming activity is not overly concentrated in a single title.
+
+In simple terms, no one game can account for more than 80% of a user’s total recorded playtime on Steam. For example, if a user has 100 total hours played, a maximum of 80 hours can come from a single game. The remaining 20 hours must be spread across other games.
+
+This requirement helps demonstrate a reasonable level of variety in gameplay, rather than a heavy reliance on just one title.
+---
+
+**Why can’t I verify a new wallet? / I get already registered error**
+
+If our system detects that you have already completed verification with a wallet, you won’t be able to verify another one until the original verification expires—this is typically one year from the initial verification date.
+
+Because we use zero-knowledge proofs, we do not store or track which specific wallet was used. If you’re unsure, please check all wallets you may have used, including older ones.
+
+Each user is limited to verifying one EVM wallet per year. Attempting to verify a different wallet before the expiration period will result in an error. This policy is in place to preserve the integrity of our Proof of Personhood system.
+
+---
+Aztec - Failed to Bridge Tokens - invalid type
+
+If you see “Failed to bridge tokens” with an invalid_type error, it’s usually a cache issue.
+Fix:
+Clear your browser history/cache.
+Refresh and try again.
+Repeat if needed.
+
+---
+Aztec - Transaction Dropped - Network Congestion
+Your transaction was dropped due to congestion on the Aztec network. This happens when the network is overloaded — some transactions are dropped by P2P nodes to manage traffic.
+
+---
+Aztec - Wallet Connection – Obsidion
+
+After connecting the Obsidion Wallet, you’ll need to manually return to https://bridge.human.tech and refresh the page.
+Right now, the wallet isn’t closing the tab or redirecting as it should — so the UI may appear stuck on a loading spinner. A simple page refresh will fix it.
+
+---
+
+
+
