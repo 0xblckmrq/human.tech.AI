@@ -204,14 +204,41 @@ class KnowledgeBase {
     console.log(`[KB] Refreshed at ${new Date().toLocaleTimeString()}`);
   }
 
-  // Build context string for the AI prompt
-  buildContext(maxLength = 40000) {
+  // Score a doc by how many query keywords appear in it
+  scoreRelevance(doc, query) {
+    const text = (doc.source + " " + doc.content).toLowerCase();
+    const words = query.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 2);
+    const uniqueWords = [...new Set(words)];
+    let score = 0;
+    for (const word of uniqueWords) {
+      // Count occurrences — more hits = more relevant
+      const count = (text.match(new RegExp(word, "g")) || []).length;
+      score += count;
+      // Bonus if keyword appears in the URL/source
+      if (doc.source.toLowerCase().includes(word)) score += 5;
+    }
+    return score;
+  }
+
+  // Build context using the most relevant docs for the query
+  buildContext(query = "", maxLength = 40000) {
+    // Score and sort docs by relevance to the query
+    const scored = this.docs
+      .map((doc) => ({ doc, score: query ? this.scoreRelevance(doc, query) : 0 }))
+      .sort((a, b) => b.score - a.score);
+
     let context = "";
-    for (const doc of this.docs) {
+    let included = 0;
+    for (const { doc, score } of scored) {
       const block = `\n\n--- Source: ${doc.source} ---\n${doc.content}`;
       if (context.length + block.length > maxLength) break;
       context += block;
+      included++;
     }
+    console.log(`[KB] Context: ${included}/${this.docs.length} docs selected for query`);
     return context;
   }
 }
@@ -226,7 +253,7 @@ class AIResponder {
   }
 
   async answer(userId, question) {
-    const context = this.kb.buildContext();
+    const context = this.kb.buildContext(question);
 
     // Build or retrieve per-user conversation history (last 6 exchanges)
     if (!this.conversationHistory.has(userId)) {
@@ -271,6 +298,7 @@ ${context || "NO_ANSWER"}`;
       });
 
       const answer = response.content[0].text.trim();
+      console.log(`[BOT] Claude raw response: "${answer.slice(0, 100)}"`);
 
       // If the AI signals no answer found, return null — bot stays silent
       if (answer === "NO_ANSWER" || answer.startsWith("NO_ANSWER")) {
