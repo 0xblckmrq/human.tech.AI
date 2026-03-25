@@ -55,8 +55,8 @@ const CONFIG = {
   // Prefix the bot uses to reply (set to "" for no prefix)
   replyPrefix: "",
 
-  // Max tokens for the AI response
-  maxTokens: 800,
+  // Max tokens for the AI response (keep low — Haiku is fast and cheap)
+  maxTokens: 300,
 };
 
 // ─── Knowledge Base ───────────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ class KnowledgeBase {
       .filter((f) => /\.(txt|md|mdx|json)$/.test(f));
     for (const file of files) {
       const content = fs.readFileSync(path.join(folderPath, file), "utf8");
-      this.docs.push({ source: file, content: content.slice(0, 8000) });
+      this.docs.push({ source: file, content: content.slice(0, 3000) });
       console.log(`[KB] Loaded doc: ${file}`);
     }
   }
@@ -107,7 +107,7 @@ class KnowledgeBase {
         timeout: 15000,
       });
       const html = await res.text();
-      let text = this.extractText(html, url).slice(0, 8000);
+      let text = this.extractText(html, url).slice(0, 3000);
       const wordCount = text.split(" ").length;
       if (wordCount < 80) {
         console.warn(`[KB] WARNING: Only ${wordCount} words from ${url} — likely JS-rendered or nav-only`);
@@ -224,7 +224,7 @@ class KnowledgeBase {
   }
 
   // Build context using the most relevant docs for the query
-  buildContext(query = "", maxLength = 40000) {
+  buildContext(query = "", maxLength = 12000) {
     // Score and sort docs by relevance to the query
     const scored = this.docs
       .map((doc) => ({ doc, score: query ? this.scoreRelevance(doc, query) : 0 }))
@@ -291,7 +291,7 @@ ${context || "NO_ANSWER"}`;
 
     try {
       const response = await this.client.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: CONFIG.maxTokens,
         system: systemPrompt,
         messages: history,
