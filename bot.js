@@ -284,7 +284,7 @@ ACCURACY:
 - Answer ONLY from the knowledge base below. Do not guess or use outside knowledge.
 - If the answer is not in the knowledge base, reply with exactly: NO_ANSWER
 - Never mention the knowledge base or documents — just answer directly.
-- Never suggest contacting a moderator — just reply NO_ANSWER if you don't know.
+- Never tell users to DM or contact a moderator — reply NO_ANSWER and let the system handle it.
 
 KNOWLEDGE BASE:
 ${context || "NO_ANSWER"}`;
@@ -300,12 +300,11 @@ ${context || "NO_ANSWER"}`;
       const answer = response.content[0].text.trim();
       console.log(`[BOT] Claude raw response: "${answer.slice(0, 100)}"`);
 
-      // If the AI signals no answer found, return null — bot stays silent
+      // If the AI signals no answer found, reply with ticket prompt
       if (answer === "NO_ANSWER" || answer.startsWith("NO_ANSWER")) {
-        console.log("[BOT] No answer found in knowledge base — staying silent.");
-        // Roll back the user message from history since we won't reply
-        history.pop();
-        return null;
+        console.log("[BOT] No answer found — sending ticket message.");
+        history.pop(); // Don't store unanswered exchanges in history
+        return "NO_ANSWER";
       }
 
       history.push({ role: "assistant", content: answer });
@@ -403,6 +402,10 @@ async function main() {
     // Ignore very short messages
     if (content.length < CONFIG.minMessageLength) return;
 
+    // Ignore pure greetings with no question or meaningful content
+    const greetingOnly = /^(hi+|hey+|hello+|howdy|good\s*(morning|afternoon|evening|night|day)|sup|what'?s\s*up|greetings|hiya|yo|hola|heya|ello)[!.,\s]*$/i;
+    if (greetingOnly.test(content)) return;
+
     // Check keyword triggers
     if (CONFIG.triggerKeywords.length > 0) {
       const lower = content.toLowerCase();
@@ -423,8 +426,12 @@ async function main() {
 
     const answer = await ai.answer(message.author.id, content);
 
-    // Bot stays silent if no answer was found in the knowledge base
+    // No answer found — send ticket message
     if (!answer) return;
+    if (answer === "NO_ANSWER") {
+      await message.reply("Please submit a ticket if you have any questions <#1136695714970345633>, or wait for our moderators to respond.");
+      return;
+    }
 
     const reply = CONFIG.replyPrefix + answer;
 
