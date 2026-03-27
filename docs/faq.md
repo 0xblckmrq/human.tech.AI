@@ -198,5 +198,131 @@ Right now, the wallet isn’t closing the tab or redirecting as it should — so
 
 ---
 
+# WaaP FAQ
+
+## How do I recover my WaaP if I lose access?
+
+WaaP uses web accounts and phone-based authentication. If you lose access, you can recover your WaaP the same way you would recover a typical Web2 account—via your email, phone number, or social login.
+
+WaaP leverages existing recovery systems (e.g., Google account recovery), making it as recoverable as any modern web account.
+
+---
+
+## What is Squid Mode?
+
+Squid Mode transforms your WaaP into a customizable multisig identity (your “dwallet”).
+
+You can define:
+
+* Any number of signers
+* A custom signing threshold
+
+This makes your account:
+
+* Flexible
+* Secure
+* Censorship-resistant
+
+---
+
+## How does recovery work in Squid Mode?
+
+In Squid Mode, you can:
+
+* Add new signers
+* Change the signing threshold
+
+This enables you to:
+
+* Bypass the original WaaP that created the account
+* Bypass a protector if needed
+* Recover your dwallet by re-establishing control of the multisig
+
+This design makes Squid Mode inherently censorship-resistant.
+
+---
+
+## What chains does WaaP support?
+
+### Mainnets
+
+* Ethereum (1)
+* Optimism (10)
+* Gnosis Chain (100)
+* Polygon (137)
+* Fantom (250)
+* zkSync (324)
+* Shape (360)
+* Base (8453)
+* Arbitrum One (42161)
+* Celo (42220)
+* Avalanche (43114)
+* Linea (59144)
+* Scroll (534352)
+* Aurora (1313161554)
+
+### Testnets
+
+* Ethereum Sepolia (11155111)
+* Optimism Sepolia (11155420)
+* Base Sepolia (84532)
+* Polygon Amoy (80002)
+* Optimism Goerli (420)
+
+---
+
+## What chains are supported for Embedded WaaP?
+
+Embedded WaaP supports any EVM-compatible chain, provided the dApp supplies the chain configuration using **EIP-3085**.
+
+---
+
+## Do I need to manage seed phrases?
+
+No. WaaP eliminates the need to manually manage seed phrases by using recoverable account-based keyshares instead.
+
+---
+
+## Do you support Solana?
+
+Not currently. Solana support is on the roadmap, but it is not actively being developed and there is no ETA yet.
+
+---
+
+## How does WaaP key management work?
+
+Your key is split into two parts:
+
+* **Sovereign Share**
+
+  * Derived from your identity/login
+  * Fully controlled by you
+
+* **Security Share**
+
+  * Held by a decentralized network or secure enclave (your choice)
+  * Cannot access the key independently
+
+---
+
+## Why is WaaP more secure than alternatives?
+
+WaaP’s model is fully decentralized and offers:
+
+* Protection against malware and blind signing
+* Greater security than standalone multisigs, browser extensions, or hardware wallets
+* Resilience against lost keys
+* No single point of failure that could compromise the wallet
+
+Additionally:
+
+* Privy wallets are app-specific and not portable across ecosystems
+* WaaP enables users to interact with any DeFi application without restrictions
+
+---
+
+
+
+
 
 
